@@ -4,7 +4,7 @@ import logging
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from llama_stack_client import APIConnectionError
+from llama_stack_client import APIConnectionError, APIResponseValidationError
 
 from authentication import get_auth_dependency
 from authentication.interface import AuthTuple
@@ -64,9 +64,19 @@ async def info_endpoint_handler(
     try:
         # try to get Llama Stack client
         client = AsyncLlamaStackClientHolder().get_client()
-        # retrieve version
-        llama_stack_version_object = await client.inspect.version()
-        llama_stack_version = llama_stack_version_object.version
+
+        # retrieve version - /inspect/version endpoint only exists in llama-stack >= 0.4.0
+        try:
+            llama_stack_version_object = await client.inspect.version()
+            llama_stack_version = llama_stack_version_object.version
+        except APIResponseValidationError:
+            # Endpoint doesn't exist in llama-stack < 0.4.0 (current supported range: 0.2.17-0.3.5)
+            logger.warning(
+                "Could not fetch version from llama-stack "
+                "(endpoint may not exist in versions < 0.4.0)"
+            )
+            llama_stack_version = "unknown (pre-0.4.0)"
+
         logger.debug("Service name: %s", configuration.configuration.name)
         logger.debug("Service version: %s", __version__)
         logger.debug("Llama Stack version: %s", llama_stack_version)

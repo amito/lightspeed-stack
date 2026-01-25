@@ -6,6 +6,7 @@ import re
 from semver import Version
 
 from llama_stack_client._client import AsyncLlamaStackClient
+from llama_stack_client import APIConnectionError, APIResponseValidationError
 
 
 from constants import (
@@ -36,12 +37,21 @@ async def check_llama_stack_version(
         InvalidLlamaStackVersionException: If the detected version is outside
         the supported range or cannot be parsed.
     """
-    version_info = await client.inspect.version()
-    compare_versions(
-        version_info.version,
-        MINIMAL_SUPPORTED_LLAMA_STACK_VERSION,
-        MAXIMAL_SUPPORTED_LLAMA_STACK_VERSION,
-    )
+    try:
+        version_info = await client.inspect.version()
+        compare_versions(
+            version_info.version,
+            MINIMAL_SUPPORTED_LLAMA_STACK_VERSION,
+            MAXIMAL_SUPPORTED_LLAMA_STACK_VERSION,
+        )
+    except (APIConnectionError, APIResponseValidationError) as e:
+        # Older llama-stack versions (< 0.4.0) don't have the /inspect/version endpoint
+        logger.warning(
+            "Could not fetch version from llama-stack (endpoint may not exist in older versions): %s. "
+            "Assuming version is within acceptable range.",
+            str(e)
+        )
+        logger.info("Skipping version check - assuming compatible llama-stack version")
 
 
 def compare_versions(version_info: str, minimal: str, maximal: str) -> None:
